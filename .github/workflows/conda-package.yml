@@ -20,7 +20,7 @@ jobs:
 
     strategy:
       matrix:
-        python: ['3.9', '3.10', '3.11', '3.12']
+        python: ['3.9']
 
     steps:
       - name: Cancel Previous Runs
@@ -45,10 +45,6 @@ jobs:
       - name: Store conda paths as envs
         run: |
           echo "CONDA_BLD=${CONDA}/conda-bld/linux-64" >> $GITHUB_ENV
-
-      - name: List conda env
-        run: |
-          conda env list
 
       - name: Install conda-build
         run: |
@@ -79,7 +75,7 @@ jobs:
 
     strategy:
       matrix:
-        python: ['3.9', '3.10', '3.11', '3.12']
+        python: ['3.9']
         experimental: [false]
         runner: [ubuntu-latest]
     continue-on-error: ${{ matrix.experimental }}
@@ -101,10 +97,6 @@ jobs:
           channels: conda-forge
           conda-remove-defaults: 'true'
 
-      - name: List conda env
-        run: |
-          conda env list
-
       - name: Install conda-index
         run: |
           conda install conda-index python=3.12  # conda-index does not support python=3.13
@@ -115,27 +107,11 @@ jobs:
           mv ${{ env.package_name }}-*.conda $GITHUB_WORKSPACE/channel/linux-64
           conda index $GITHUB_WORKSPACE/channel
 
-      - name: Test local channel
-        run: |
-          conda search ${{ env.package_name }} -c $GITHUB_WORKSPACE/channel --override-channels
-
-      - name: List conda env
-        run: |
-          conda env list
-
       - name: Install mkl_fft
         run: |
+          conda env list
           CHANNELS="-c $GITHUB_WORKSPACE/channel ${{ env.CHANNELS }}"
-          conda env list
           conda install -n ${{ env.test_env_name }} python=${{ matrix.python }} ${{ env.package_name }} pytest scipy $CHANNELS
-          conda env list
-
-      - name: List installed packages
-        run: |
-          conda list -n ${{ env.test_env_name }}
-
-      - name: List conda env
-        run: |
           conda env list
 
       - name: Run tests
@@ -151,7 +127,7 @@ jobs:
 
     strategy:
       matrix:
-        python: ['3.9', '3.10', '3.11', '3.12']
+        python: ['3.9']
 
     steps:
       - name: Cancel Previous Runs
@@ -178,10 +154,6 @@ jobs:
         run: |
           echo "CONDA_BLD=$CONDA_PREFIX/conda-bld/win-64/" | tr "\\\\" '/' >> $GITHUB_ENV
 
-      - name: List conda env
-        run: |
-          conda env list
-
       - name: Install conda-build
         run: |
           conda install conda-build python=3.12  # conda-build does not support python=3.13
@@ -206,7 +178,7 @@ jobs:
 
     strategy:
       matrix:
-        python: ['3.9', '3.10', '3.11', '3.12']
+        python: ['3.9']
         experimental: [false]
         runner: [windows-2019]
     continue-on-error: ${{ matrix.experimental }}
@@ -229,10 +201,6 @@ jobs:
           channels: conda-forge
           conda-remove-defaults: 'true'
 
-      - name: List conda env
-        run: |
-          conda env list
-
       - name: Create conda channel
         run: |
           echo ${{ env.workdir }}
@@ -249,22 +217,6 @@ jobs:
         run: |
           python -m conda_index ${{ env.workdir }}\channel
 
-      - name: Test conda channel
-        run: |
-          conda search ${{ env.package_name }} -c ${{ env.workdir }}\channel --override-channels
-
-      - name: Dump mkl_fft version info from created channel into ver.json
-        run: |
-          conda search ${{ env.package_name }} -c ${{ env.workdir }}\channel --override-channels --info --json > ${{ env.workdir }}\ver.json
-
-      - name: Output content of produced ver.json
-        shell: pwsh
-        run: Get-Content -Path ${{ env.workdir }}\ver.json
-
-      - name: List conda env
-        run: |
-          conda env list
-
       - name: Install mkl_fft
         run: |
           @ECHO ON
@@ -279,16 +231,6 @@ jobs:
           conda env list
           conda install ${{ env.package_name }}=%PACKAGE_VERSION% %TEST_DEPENDENCIES% python=${{ matrix.python }} -c ${{ env.workdir }}\channel ${{ env.CHANNELS }}
           conda env list
-
-      - name: List conda env
-        run: |
-          conda env list
-
-      - name: Report content of test environment
-        run: |
-          echo "Value of CONDA environment variable was: " %CONDA%
-          echo "Value of CONDA_PREFIX environment variable was: " %CONDA_PREFIX%
-          conda info && conda list -n ${{ env.test_env_name }}
 
       - name: Run tests
         run: |
