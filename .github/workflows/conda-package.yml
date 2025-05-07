@@ -228,6 +228,7 @@ jobs:
              SET PACKAGE_VERSION=%%F
           )
           SET "TEST_DEPENDENCIES=pytest scipy"
+          conda env list
           conda install ${{ env.package_name }}=%PACKAGE_VERSION% %TEST_DEPENDENCIES% python=${{ matrix.python }} -c ${{ env.workdir }}\channel ${{ env.CHANNELS }}
 
       - name: Run tests
