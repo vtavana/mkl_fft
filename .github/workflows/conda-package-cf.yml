@@ -9,49 +9,66 @@ on:
 permissions: read-all
 
 env:
-  PACKAGE_NAME: mkl_fft
-  MODULE_NAME: mkl_fft
-  TEST_ENV_NAME: test_mkl_fft
-  VER_SCRIPT1: "import json; f = open('ver.json', 'r'); j = json.load(f); f.close(); d = j['mkl_fft'][0];"
-  VER_SCRIPT2: "print('='.join((d[s] for s in ('version', 'build'))))"
+  package_name: mkl_fft
+  test_env_name: test_mkl_fft
+  ver_script_part1: "import json; f = open('ver.json', 'r'); j = json.load(f); f.close(); d = j['mkl_fft'][0];"
+  ver_script_part2: "print('='.join((d[s] for s in ('version', 'build'))))"
+  run-optional-steps: 'false'
 
 jobs:
   build_linux:
     runs-on: ubuntu-latest
+
     strategy:
       matrix:
         python: ['3.9', '3.10', '3.11', '3.12']
+
     steps:
       - name: Cancel Previous Runs
         uses: styfle/cancel-workflow-action@85880fa0301c86cca9da44039ee3bb12d3bedbfa # 0.12.1
         with:
           access_token: ${{ github.token }}
 
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - name: Checkout repo
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
           fetch-depth: 0
 
-      - name: Set pkgs_dirs
-        run: |
-          echo "pkgs_dirs: [~/.conda/pkgs]" >> ~/.condarc
-
       - name: Cache conda packages
+        if: env.run-optional-steps == 'true'
         uses: actions/cache@5a3ec84eff668545956fd18022155c47e93e2684 # v4.2.3
         env:
-          CACHE_NUMBER: 0  # Increase to reset cache
+          cache_number: 0  # Increase to reset cache
         with:
-          path: ~/.conda/pkgs
+          path: /home/runner/conda_pkgs_dir
           key:
-            ${{ runner.os }}-conda-${{ env.CACHE_NUMBER }}-python-${{ matrix.python }}-${{hashFiles('**/meta.yaml') }}
+            ${{ runner.os }}-conda-${{ env.cache_number }}-python-${{ matrix.python }}-${{hashFiles('**/meta.yaml') }}
           restore-keys: |
-            ${{ runner.os }}-conda-${{ env.CACHE_NUMBER }}-python-${{ matrix.python }}-
-            ${{ runner.os }}-conda-${{ env.CACHE_NUMBER }}-
+            ${{ runner.os }}-conda-${{ env.cache_number }}-python-${{ matrix.python }}-
+            ${{ runner.os }}-conda-${{ env.cache_number }}-
 
-      - name: Add conda to system path
-        run: echo $CONDA/bin >> $GITHUB_PATH
+      - name: Set pkgs_dirs
+        if: env.run-optional-steps == 'true'
+        run: |
+          echo "pkgs_dirs: [/home/runner/conda_pkgs_dir]" >> ~/.condarc
+
+      - name: Setup miniconda
+        uses: conda-incubator/setup-miniconda@505e6394dae86d6a5c7fbb6e3fb8938e3e863830 # v3.1.1
+        with:
+          miniforge-version: latest
+          activate-environment: build
+          python-version: ${{ matrix.python }}
+          channels: conda-forge
+          conda-remove-defaults: 'true'
+          pkgs-dirs: /home/runner/conda_pkgs_dir
+
+      - name: Store conda paths as envs
+        run: |
+          echo "CONDA_BLD=${CONDA}/conda-bld/linux-64" >> $GITHUB_ENV
 
       - name: Install conda-build
-        run: conda install conda-build python=3.12
+        run: |
+          conda install conda-build python=3.12 # conda-build does not support python=3.13
 
       - name: Build conda package with NumPy 2.0
         run: |
@@ -68,8 +85,8 @@ jobs:
       - name: Upload artifact
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
-          name: ${{ env.PACKAGE_NAME }} ${{ runner.os }} Python ${{ matrix.python }}
-          path: /usr/share/miniconda/conda-bld/linux-64/${{ env.PACKAGE_NAME }}-*.conda
+          name: ${{ env.package_name }} ${{ runner.os }} Python ${{ matrix.python }}
+          path: ${{ env.CONDA_BLD }}/${{ env.package_name }}-*.conda
 
   test_linux:
     needs: build_linux
@@ -77,7 +94,7 @@ jobs:
 
     strategy:
       matrix:
-        python_ver: ['3.9', '3.10', '3.11', '3.12']
+        python: ['3.9', '3.10', '3.11', '3.12']
         numpy: ['numpy"<2"', 'numpy">=2"']
         experimental: [false]
         runner: [ubuntu-latest]
@@ -89,58 +106,76 @@ jobs:
       - name: Download artifact
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
-          name: ${{ env.PACKAGE_NAME }} ${{ runner.os }} Python ${{ matrix.python_ver }}
-
-      - name: Add conda to system path
-        run: echo $CONDA/bin >> $GITHUB_PATH
-
-      - name: Install conda-build
-        run: conda install conda-build python=3.12
-
-      - name: Create conda channel
-        run: |
-          mkdir -p $GITHUB_WORKSPACE/channel/linux-64
-          mv ${PACKAGE_NAME}-*.conda $GITHUB_WORKSPACE/channel/linux-64
-          conda index $GITHUB_WORKSPACE/channel
-          # Test channel
-          conda search $PACKAGE_NAME -c $GITHUB_WORKSPACE/channel --override-channels
-
-      - name: Collect dependencies
-        run: |
-          CHANNELS="-c $GITHUB_WORKSPACE/channel ${{ env.CHANNELS }}"
-          conda create -n ${{ env.TEST_ENV_NAME }} $PACKAGE_NAME python=${{ matrix.python_ver }} ${{ matrix.numpy }} $CHANNELS --only-deps --dry-run > lockfile
-
-      - name: Display lockfile
-        run: cat lockfile
-
-      - name: Set pkgs_dirs
-        run: |
-          echo "pkgs_dirs: [~/.conda/pkgs]" >> ~/.condarc
+          name: ${{ env.package_name }} ${{ runner.os }} Python ${{ matrix.python }}
 
       - name: Cache conda packages
+        if: env.run-optional-steps == 'true'
         uses: actions/cache@5a3ec84eff668545956fd18022155c47e93e2684 # v4.2.3
         env:
-          CACHE_NUMBER: 0  # Increase to reset cache
+          cache_number: 0  # Increase to reset cache
         with:
-          path: ~/.conda/pkgs
+          path: /home/runner/conda_pkgs_dir
           key:
-            ${{ runner.os }}-conda-${{ env.CACHE_NUMBER }}-python-${{ matrix.python_ver }}-${{hashFiles('lockfile') }}
+            ${{ runner.os }}-conda-${{ env.cache_number }}-python-${{ matrix.python }}-${{hashFiles('lockfile') }}
           restore-keys: |
-            ${{ runner.os }}-conda-${{ env.CACHE_NUMBER }}-python-${{ matrix.python_ver }}-
-            ${{ runner.os }}-conda-${{ env.CACHE_NUMBER }}-
+            ${{ runner.os }}-conda-${{ env.cache_number }}-python-${{ matrix.python }}-
+            ${{ runner.os }}-conda-${{ env.cache_number }}-
+
+      - name: Set pkgs_dirs
+        if: env.run-optional-steps == 'true'
+        run: |
+          echo "pkgs_dirs: [/home/runner/conda_pkgs_dir]" >> ~/.condarc
+
+      - name: Setup miniconda
+        uses: conda-incubator/setup-miniconda@505e6394dae86d6a5c7fbb6e3fb8938e3e863830 # v3.1.1
+        with:
+          miniforge-version: latest
+          activate-environment: ${{ env.test_env_name }}
+          python-version: ${{ matrix.python }}
+          channels: conda-forge
+          conda-remove-defaults: 'true'
+          pkgs-dirs: /home/runner/conda_pkgs_dir
+
+      - name: Install conda-index
+        run: |
+          conda install conda-index python=3.12  # conda-index does not support python=3.13
+
+      - name: Create local channel
+        run: |
+          mkdir -p $GITHUB_WORKSPACE/channel/linux-64
+          mv ${{ env.package_name }}-*.conda $GITHUB_WORKSPACE/channel/linux-64
+          conda index $GITHUB_WORKSPACE/channel
+
+      - name: Test local channel
+        if: env.run-optional-steps == 'true'
+        run: |
+          conda search ${{ env.package_name }} -c $GITHUB_WORKSPACE/channel --override-channels
+
+      - name: Collect dependencies
+        if: env.run-optional-steps == 'true'
+        run: |
+          CHANNELS="-c $GITHUB_WORKSPACE/channel ${{ env.CHANNELS }}"
+          conda install -n ${{ env.test_env_name }} ${{ env.package_name }} python=${{ matrix.python }} ${{ matrix.numpy }} $CHANNELS --only-deps --dry-run > lockfile
+
+      - name: Display lockfile content
+        if: env.run-optional-steps == 'true'
+        run: cat lockfile
 
       - name: Install mkl_fft
         run: |
           CHANNELS="-c $GITHUB_WORKSPACE/channel ${{ env.CHANNELS }}"
-          conda create -n ${{ env.TEST_ENV_NAME }} python=${{ matrix.python_ver }} ${{ matrix.numpy }} $PACKAGE_NAME pytest scipy $CHANNELS
-          # Test installed packages
-          conda list -n ${{ env.TEST_ENV_NAME }}
+          conda install -n ${{ env.test_env_name }} python=${{ matrix.python }} ${{ matrix.numpy }} ${{ env.package_name }} pytest scipy $CHANNELS
+
+      - name: List installed packages
+        if: env.run-optional-steps == 'true'
+        run: |
+          conda list -n ${{ env.test_env_name }}
 
       - name: Run tests
         run: |
           source $CONDA/etc/profile.d/conda.sh
-          conda activate ${{ env.TEST_ENV_NAME }}
-          pytest -v --pyargs $MODULE_NAME
+          conda activate ${{ env.test_env_name }}
+          python -m pytest -v --pyargs ${{ env.package_name }}.tests
 
   build_windows:
     runs-on: windows-2019
@@ -148,54 +183,64 @@ jobs:
     strategy:
       matrix:
         python: ['3.9', '3.10', '3.11', '3.12']
+
     steps:
       - name: Cancel Previous Runs
         uses: styfle/cancel-workflow-action@85880fa0301c86cca9da44039ee3bb12d3bedbfa # 0.12.1
         with:
           access_token: ${{ github.token }}
 
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - name: Checkout repo
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
           fetch-depth: 0
 
-      - uses: conda-incubator/setup-miniconda@505e6394dae86d6a5c7fbb6e3fb8938e3e863830 # v3.1.1
+      - name: Cache conda packages
+        if: env.run-optional-steps == 'true'
+        uses: actions/cache@5a3ec84eff668545956fd18022155c47e93e2684 # v4.2.3
+        env:
+          cache_number: 0  # Increase to reset cache
         with:
-          miniforge-version: latest
+          path: C:\Users\runneradmin\conda_pkgs_dir
+          key:
+            ${{ runner.os }}-conda-${{ env.cache_number }}-python-${{ matrix.python }}-${{hashFiles('**/meta.yaml') }}
+          restore-keys: |
+            ${{ runner.os }}-conda-${{ env.cache_number }}-python-${{ matrix.python }}-
+            ${{ runner.os }}-conda-${{ env.cache_number }}-
+
+      - name: Set pkgs_dirs
+        if: env.run-optional-steps == 'true'
+        run: |
+          echo "pkgs_dirs: [C:\Users\runneradmin\conda_pkgs_dir]" >> ~/.condarc
+
+      - name: Setup miniconda
+        uses: conda-incubator/setup-miniconda@505e6394dae86d6a5c7fbb6e3fb8938e3e863830 # v3.1.1
+        with:
+          miniforge-version: 24.11.3-2  # latest version 25.3 had an issue
           activate-environment: build
           python-version: ${{ matrix.python }}
           channels: conda-forge
           conda-remove-defaults: 'true'
-
-      - name: Install conda-build
-        run: conda install -n base conda-build python=3.12
-
-      - name: Cache conda packages
-        uses: actions/cache@5a3ec84eff668545956fd18022155c47e93e2684 # v4.2.3
-        env:
-          CACHE_NUMBER: 3  # Increase to reset cache
-        with:
-          path: /home/runner/conda_pkgs_dir
-          key:
-            ${{ runner.os }}-conda-${{ env.CACHE_NUMBER }}-python-${{ matrix.python }}-${{hashFiles('**/meta.yaml') }}
-          restore-keys: |
-            ${{ runner.os }}-conda-${{ env.CACHE_NUMBER }}-python-${{ matrix.python }}-
-            ${{ runner.os }}-conda-${{ env.CACHE_NUMBER }}-
-
-      - name: Build conda package with NumPy 2.0
-        run: |
-          conda activate
-          conda build --no-test --python ${{ matrix.python }} --numpy 2.0 -c conda-forge --override-channels conda-recipe-cf
+          pkgs-dirs: C:\Users\runneradmin\conda_pkgs_dir
 
       - name: Store conda paths as envs
         shell: bash -l {0}
         run: |
-          echo "CONDA_BLD=$CONDA/conda-bld/win-64/" | tr "\\\\" '/' >> $GITHUB_ENV
+          echo "CONDA_BLD=$CONDA_PREFIX/conda-bld/win-64/" | tr "\\\\" '/' >> $GITHUB_ENV
+
+      - name: Install conda-build
+        run: |
+          conda install conda-build python=3.12  # conda-build does not support python=3.13
+
+      - name: Build conda package with NumPy 2.0
+        run: |
+          conda build --no-test --python ${{ matrix.python }} --numpy 2.0 -c conda-forge --override-channels conda-recipe-cf
 
       - name: Upload artifact
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
-          name: ${{ env.PACKAGE_NAME }} ${{ runner.os }} Python ${{ matrix.python }}
-          path: ${{ env.CONDA_BLD }}${{ env.PACKAGE_NAME }}-*.conda
+          name: ${{ env.package_name }} ${{ runner.os }} Python ${{ matrix.python }}
+          path: ${{ env.CONDA_BLD }}${{ env.package_name }}-*.conda
 
   test_windows:
     needs: build_windows
@@ -206,7 +251,7 @@ jobs:
 
     strategy:
       matrix:
-        python_ver: ['3.9', '3.10', '3.11', '3.12']
+        python: ['3.9', '3.10', '3.11', '3.12']
         numpy: ['numpy"<2"', 'numpy">=2"']
         experimental: [false]
         runner: [windows-2019]
@@ -219,93 +264,106 @@ jobs:
       - name: Download artifact
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
-          name: ${{ env.PACKAGE_NAME }} ${{ runner.os }} Python ${{ matrix.python_ver }}
+          name: ${{ env.package_name }} ${{ runner.os }} Python ${{ matrix.python }}
 
-      - uses: conda-incubator/setup-miniconda@505e6394dae86d6a5c7fbb6e3fb8938e3e863830 # v3.1.1
+      - name: Cache conda packages
+        if: env.run-optional-steps == 'true'
+        uses: actions/cache@5a3ec84eff668545956fd18022155c47e93e2684 # v4.2.3
+        env:
+          cache_number: 0  # Increase to reset cache
         with:
-          miniforge-version: latest
-          activate-environment: ${{ env.TEST_ENV_NAME }}
+          path: C:\Users\runneradmin\conda_pkgs_dir
+          key:
+            ${{ runner.os }}-conda-${{ env.cache_number }}-python-${{ matrix.python }}-${{hashFiles('lockfile') }}
+          restore-keys: |
+            ${{ runner.os }}-conda-${{ env.cache_number }}-python-${{ matrix.python }}-
+            ${{ runner.os }}-conda-${{ env.cache_number }}-
+
+      - name: Set pkgs_dirs
+        if: env.run-optional-steps == 'true'
+        shell: pwsh
+        run: |
+          echo "pkgs_dirs: [C:\Users\runneradmin\conda_pkgs_dir]" >> ~/.condarc
+
+      - name: Setup miniconda
+        uses: conda-incubator/setup-miniconda@505e6394dae86d6a5c7fbb6e3fb8938e3e863830 # v3.1.1
+        with:
+          miniforge-version: 24.11.3-2  # latest version 25.3 had an issue
+          activate-environment: ${{ env.test_env_name }}
           python-version: ${{ matrix.python }}
           channels: conda-forge
           conda-remove-defaults: 'true'
+          pkgs-dirs: C:\Users\runneradmin\conda_pkgs_dir
 
-      - name: Create conda channel with the artifact bit
-        shell: cmd /C CALL {0}
+      - name: Create conda channel
         run: |
           echo ${{ env.workdir }}
-          mkdir ${{ env.workdir }}\channel\
+          mkdir ${{ env.workdir }}\channel
           mkdir ${{ env.workdir }}\channel\win-64
-          move ${{ env.PACKAGE_NAME }}-*.conda ${{ env.workdir }}\channel\win-64
+          move ${{ env.package_name }}-*.conda ${{ env.workdir }}\channel\win-64
           dir ${{ env.workdir }}\channel\win-64
 
-      - name: Install conda index
-        shell: cmd /C CALL {0}
-        run: conda install -n base conda-index
+      - name: Install conda-index
+        run: |
+          conda install conda-index python=3.12
 
-      - name: Index the channel
-        shell: cmd /C CALL {0}
-        run: conda index ${{ env.workdir }}\channel
+      - name: Create local channel
+        run: |
+          python -m conda_index ${{ env.workdir }}\channel
+
+      - name: Test local channel
+        if: env.run-optional-steps == 'true'
+        run: |
+          conda search ${{ env.package_name }} -c ${{ env.workdir }}\channel --override-channels
 
       - name: Dump mkl_fft version info from created channel into ver.json
-        shell: cmd /C CALL {0}
+        if: env.run-optional-steps == 'true'
         run: |
-          conda search ${{ env.PACKAGE_NAME }} -c ${{ env.workdir }}/channel --override-channels --info --json > ${{ env.workdir }}\ver.json
+          conda search ${{ env.package_name }} -c ${{ env.workdir }}\channel --override-channels --info --json > ${{ env.workdir }}\ver.json
 
       - name: Output content of produced ver.json
+        if: env.run-optional-steps == 'true'
         shell: pwsh
         run: Get-Content -Path ${{ env.workdir }}\ver.json
 
       - name: Collect dependencies
-        shell: cmd /C CALL {0}
+        if: env.run-optional-steps == 'true'
         run: |
           @ECHO ON
           IF NOT EXIST ver.json (
               copy /Y ${{ env.workdir }}\ver.json .
           )
-          SET "SCRIPT=%VER_SCRIPT1% %VER_SCRIPT2%"
+          SET "SCRIPT=%ver_script_part1% %ver_script_part2%"
           FOR /F "tokens=* USEBACKQ" %%F IN (`python -c "%SCRIPT%"`) DO (
              SET PACKAGE_VERSION=%%F
           )
-          conda install -n ${{ env.TEST_ENV_NAME }} ${{ env.PACKAGE_NAME }}=%PACKAGE_VERSION% python=${{ matrix.python_ver }} ${{ matrix.numpy }} -c ${{ env.workdir }}/channel ${{ env.CHANNELS }} --only-deps --dry-run > lockfile
+          conda install -n ${{ env.test_env_name }} ${{ env.package_name }}=%PACKAGE_VERSION% python=${{ matrix.python }} ${{ matrix.numpy }} -c ${{ env.workdir }}\channel ${{ env.CHANNELS }} --only-deps --dry-run > lockfile
 
       - name: Display lockfile content
+        if: env.run-optional-steps == 'true'
         shell: pwsh
         run: Get-Content -Path .\lockfile
 
-      - name: Cache conda packages
-        uses: actions/cache@5a3ec84eff668545956fd18022155c47e93e2684 # v4.2.3
-        env:
-          CACHE_NUMBER: 0  # Increase to reset cache
-        with:
-          path: /home/runner/conda_pkgs_dir
-          key:
-            ${{ runner.os }}-conda-${{ env.CACHE_NUMBER }}-python-${{ matrix.python_ver }}-${{hashFiles('lockfile') }}
-          restore-keys: |
-            ${{ runner.os }}-conda-${{ env.CACHE_NUMBER }}-python-${{ matrix.python_ver }}-
-            ${{ runner.os }}-conda-${{ env.CACHE_NUMBER }}-
-
       - name: Install mkl_fft
-        shell: cmd /C CALL {0}
         run: |
           @ECHO ON
           IF NOT EXIST ver.json (
               copy /Y ${{ env.workdir }}\ver.json .
           )
-          set "SCRIPT=%VER_SCRIPT1% %VER_SCRIPT2%"
+          set "SCRIPT=%ver_script_part1% %ver_script_part2%"
           FOR /F "tokens=* USEBACKQ" %%F IN (`python -c "%SCRIPT%"`) DO (
              SET PACKAGE_VERSION=%%F
           )
-          SET "TEST_DEPENDENCIES=pytest pytest-cov"
-          conda install -n ${{ env.TEST_ENV_NAME }} ${{ env.PACKAGE_NAME }}=%PACKAGE_VERSION% %TEST_DEPENDENCIES% python=${{ matrix.python }} ${{ matrix.numpy }} scipy -c ${{ env.workdir }}/channel ${{ env.CHANNELS }}
+          SET "TEST_DEPENDENCIES=pytest scipy"
+          conda install ${{ env.package_name }}=%PACKAGE_VERSION% %TEST_DEPENDENCIES% python=${{ matrix.python }} ${{ matrix.numpy }} -c ${{ env.workdir }}\channel ${{ env.CHANNELS }}
 
       - name: Report content of test environment
-        shell: cmd /C CALL {0}
+        if: env.run-optional-steps == 'true'
         run: |
           echo "Value of CONDA environment variable was: " %CONDA%
           echo "Value of CONDA_PREFIX environment variable was: " %CONDA_PREFIX%
-          conda info && conda list -n ${{ env.TEST_ENV_NAME }}
+          conda info && conda list -n ${{ env.test_env_name }}
 
       - name: Run tests
-        shell: cmd /C CALL {0}
-        run: >-
-          conda activate ${{ env.TEST_ENV_NAME }} && python -m pytest -v -s --pyargs ${{ env.MODULE_NAME }}
+        run: |
+          python -m pytest -v -s --pyargs ${{ env.package_name }}.tests

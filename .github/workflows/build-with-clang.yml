@@ -74,4 +74,4 @@ jobs:
         run: |
           source ${{ env.ONEAPI_ROOT }}/setvars.sh
           pip install scipy mkl-service pytest
-          pytest -s -v --pyargs mkl_fft
+          python -m pytest -sv --pyargs mkl_fft/tests
