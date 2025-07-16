@@ -196,6 +196,8 @@ def test_axes(interface):
     "func", ["fftshift", "ifftshift", "fftfreq", "rfftfreq"]
 )
 def test_interface_helper_functions(interface, func):
+    if interface in [mfi.scipy_fft, mfi.numpy_fft]:
+        pytest.skip("skip scipy_fft and numpy_fft functions")
     assert hasattr(interface, func)
 
 

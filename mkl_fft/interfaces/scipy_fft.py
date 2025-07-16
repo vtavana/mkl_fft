@@ -24,10 +24,6 @@
 # OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-
-# Added for completing the namespaces
-from scipy.fft import fftfreq, fftshift, ifftshift, rfftfreq
-
 # pylint: disable=no-name-in-module
 from ._scipy_fft import (
     fft,
@@ -71,10 +67,6 @@ __all__ = [
     "ihfft2",
     "hfftn",
     "ihfftn",
-    "fftshift",
-    "ifftshift",
-    "fftfreq",
-    "rfftfreq",
     "get_workers",
     "set_workers",
 ]
