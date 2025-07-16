@@ -1,0 +1,60 @@
+diff --git a/mkl_fft/interfaces/numpy_fft.py b/mkl_fft/interfaces/numpy_fft.py
+index 6ab7e79..a9ef7c6 100644
+--- a/mkl_fft/interfaces/numpy_fft.py
++++ b/mkl_fft/interfaces/numpy_fft.py
+@@ -24,9 +24,6 @@
+ # OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+ # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
+-# Added for completing the namespaces
+-from numpy.fft import fftfreq, fftshift, ifftshift, rfftfreq
+-
+ # pylint: disable=no-name-in-module
+ from ._numpy_fft import (
+     fft,
+@@ -60,8 +57,4 @@ __all__ = [
+     "irfftn",
+     "hfft",
+     "ihfft",
+-    "fftshift",
+-    "ifftshift",
+-    "fftfreq",
+-    "rfftfreq",
+ ]
+diff --git a/mkl_fft/interfaces/scipy_fft.py b/mkl_fft/interfaces/scipy_fft.py
+index c3ae471..9dfc8fa 100644
+--- a/mkl_fft/interfaces/scipy_fft.py
++++ b/mkl_fft/interfaces/scipy_fft.py
+@@ -24,10 +24,6 @@
+ # OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+ # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
+-
+-# Added for completing the namespaces
+-from scipy.fft import fftfreq, fftshift, ifftshift, rfftfreq
+-
+ # pylint: disable=no-name-in-module
+ from ._scipy_fft import (
+     fft,
+@@ -71,10 +67,6 @@ __all__ = [
+     "ihfft2",
+     "hfftn",
+     "ihfftn",
+-    "fftshift",
+-    "ifftshift",
+-    "fftfreq",
+-    "rfftfreq",
+     "get_workers",
+     "set_workers",
+ ]
+diff --git a/mkl_fft/tests/test_interfaces.py b/mkl_fft/tests/test_interfaces.py
+index 2fbff71..ba969b0 100644
+--- a/mkl_fft/tests/test_interfaces.py
++++ b/mkl_fft/tests/test_interfaces.py
+@@ -196,6 +196,8 @@ def test_axes(interface):
+     "func", ["fftshift", "ifftshift", "fftfreq", "rfftfreq"]
+ )
+ def test_interface_helper_functions(interface, func):
++    if interface in [mfi.scipy_fft, mfi.numpy_fft]:
++        pytest.skip("skip scipy_fft and numpy_fft functions")
+     assert hasattr(interface, func)
