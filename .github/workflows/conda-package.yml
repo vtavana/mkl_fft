@@ -142,8 +142,9 @@ jobs:
           CHANNELS="-c $GITHUB_WORKSPACE/channel ${{ env.CHANNELS }}"
           conda create -n ${{ env.TEST_ENV_NAME }} $PACKAGE_NAME=${{ env.PACKAGE_VERSION }} python=${{ matrix.python }} pytest $CHANNELS
           if [[ "${{ matrix.python }}" != 3.9* ]]; then
-            conda install -n ${{ env.TEST_ENV_NAME }} "scipy>=1.10"
-          fi          # Test installed packages
+            conda install -n ${{ env.TEST_ENV_NAME }} "scipy>=1.10" $CHANNELS
+          fi          
+          # Test installed packages
           conda list -n ${{ env.TEST_ENV_NAME }}
 
       - name: Run tests
@@ -312,7 +313,7 @@ jobs:
           SET "TEST_DEPENDENCIES=pytest"
           conda install -n ${{ env.TEST_ENV_NAME }} ${{ env.PACKAGE_NAME }}=%PACKAGE_VERSION% %TEST_DEPENDENCIES% python=${{ matrix.python }} -c ${{ env.workdir }}/channel ${{ env.CHANNELS }}
           if ("${{ matrix.python }}" -ne "3.9") {
-            conda install -n ${{ env.TEST_ENV_NAME }} scipy
+            conda install -n ${{ env.TEST_ENV_NAME }} scipy -c ${{ env.workdir }}/channel ${{ env.CHANNELS }}
           }        
       - name: Report content of test environment
         shell: cmd /C CALL {0}
