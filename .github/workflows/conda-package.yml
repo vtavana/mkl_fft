@@ -140,8 +140,10 @@ jobs:
       - name: Install mkl_fft
         run: |
           CHANNELS="-c $GITHUB_WORKSPACE/channel ${{ env.CHANNELS }}"
-          conda create -n ${{ env.TEST_ENV_NAME }} $PACKAGE_NAME=${{ env.PACKAGE_VERSION }} python=${{ matrix.python }} pytest "scipy>=1.10" $CHANNELS
-          # Test installed packages
+          conda create -n ${{ env.TEST_ENV_NAME }} $PACKAGE_NAME=${{ env.PACKAGE_VERSION }} python=${{ matrix.python }} pytest $CHANNELS
+          if [[ "${{ matrix.python }}" != 3.9* ]]; then
+            conda install -n ${{ env.TEST_ENV_NAME }} "scipy>=1.10"
+          fi          # Test installed packages
           conda list -n ${{ env.TEST_ENV_NAME }}
 
       - name: Run tests
